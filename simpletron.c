@@ -22,6 +22,9 @@ void printMessages()
     printf("\n--------------------------------\n");
 }
 
+/*
+Função responsável pela inicialização do Simpletron e de seus componentes internos.
+*/
 Simpletron simpletronInitializer()
 {
     Simpletron simpletron;
@@ -39,6 +42,10 @@ Simpletron simpletronInitializer()
     return simpletron;
 }
 
+/*
+Função responsável por imprimir o conteúdo de cada registrador, bem como
+o conteúdo completo da memória.
+*/
 void computerDump(Simpletron *simpletron)
 {
     printf("\n\nREGISTERS:\n\n");
@@ -88,22 +95,34 @@ void mensagemErro(Simpletron *simpletron, ErrorType type)
     {
         case INTERVAL_ERROR:
 
-            printf("\n** O valor aramzenado está fora do limite previsto. [-9999, 9999]. **\n");
+            printf("\n** O valor armazenado está fora do limite previsto. [-9999, 9999]. **\n");
+            printf("\n** Execução do Simpletron encerrada de forma anormal. **\n");
             computerDump(simpletron);
-            printf("\n** Encerrando a execução do programa do programa de maneira anormal **\n");
             break;
 
         case DIVIDE_ERROR:
 
-            printf("\n** Não é possível dividir por zero. **\n");
+            printf("\n** Tentativa de divisão por zero. **\n");
+            printf("\n** Execução do Simpletron encerrada de forma anormal. **\n");
             computerDump(simpletron);
-            printf("\n** Encerrando a execução do programa do programa de maneira anormal **\n");
+            break;
+
+        case INVALID_INSTRUCTION:
+
+            printf("\n** Instrução fora do limite previsto. [-9999, 9999]. **\n");
+            printf("\n** Execução do Simpletron encerrada de forma anormal. **\n");
+            computerDump(simpletron);
             break;
     }
 }
 
-bool executarPrograma(Simpletron *simpletron, int operationCode)
+bool executarInstrucao(Simpletron *simpletron, int operationCode)
 {
+    /*
+    IMPORTANTE: as instruções de BRANCH, BRANCHNEG (apenas se o acumulador for negativo),
+    BRANCHZERO(apenas se o acumulador for zero) e HALT não mudam o contador de instruções , pois
+    elas são instruções de transferência de controle.
+    */
 
     switch(operationCode)
     {
@@ -118,21 +137,26 @@ bool executarPrograma(Simpletron *simpletron, int operationCode)
                     return false;
                 }
 
+                simpletron->instructionCounter++;
+
                 break;
 
             case WRITE:
 
                 printf("\n** Número em %02d: %d. **\n", simpletron->operand, simpletron->memory[simpletron->operand]);
+                simpletron->instructionCounter++;
                 break;
 
             case LOAD:
 
                 simpletron->accumulator = simpletron->memory[simpletron->operand];
+                simpletron->instructionCounter++;
                 break;
 
             case STORE:
 
                 simpletron->memory[simpletron->operand] = simpletron->accumulator;
+                simpletron->instructionCounter++;
                 break;
 
             case ADD:
@@ -144,6 +168,8 @@ bool executarPrograma(Simpletron *simpletron, int operationCode)
                     mensagemErro(simpletron, INTERVAL_ERROR);
                     return false;
                 }
+
+                simpletron->instructionCounter++;
 
                 break;
 
@@ -157,6 +183,8 @@ bool executarPrograma(Simpletron *simpletron, int operationCode)
                     return false;
                 }
 
+                simpletron->instructionCounter++;
+
                 break;
 
             case MULTIPLY:
@@ -168,6 +196,8 @@ bool executarPrograma(Simpletron *simpletron, int operationCode)
                     mensagemErro(simpletron, INTERVAL_ERROR);
                     return false;
                 }
+
+                simpletron->instructionCounter++;
 
                 break;
 
@@ -187,6 +217,8 @@ bool executarPrograma(Simpletron *simpletron, int operationCode)
                     return false;
                 }
 
+                simpletron->instructionCounter++;
+
                 break;
 
             case BRANCH:
@@ -200,6 +232,10 @@ bool executarPrograma(Simpletron *simpletron, int operationCode)
                 {
                     simpletron->instructionCounter = simpletron->operand;
                 }
+                else
+                {
+                    simpletron->instructionCounter++;
+                }
 
                 break;
 
@@ -209,20 +245,24 @@ bool executarPrograma(Simpletron *simpletron, int operationCode)
                 {
                     simpletron->instructionCounter = simpletron->operand;
                 }
+                else
+                {
+                    simpletron->instructionCounter++;
+                }
 
                 break;
 
             case HALT:
 
+                printf("\n** Encerrando a execução do programa de maneira normal. **\n");
                 computerDump(simpletron);
-                printf("\n** Encerrando a execução do programa de maneira normal **\n");
                 return false; //Só para sair do laço.
 
             default:
 
                 printf("\n** Instrução inválida. **\n");
+                printf("\n** Encerrando a execução do programa de maneira anormal. **\n");
                 computerDump(simpletron);
-                printf("\n** Encerrando a execução do programa de maneira normal **\n");
                 return false;
                 break;
     }
@@ -230,58 +270,110 @@ bool executarPrograma(Simpletron *simpletron, int operationCode)
     return true;
 }
 
-void lerPrograma(Simpletron *simpletron, const char *fileName)
+bool lerPrograma(Simpletron *simpletron)
 {
-    srand(time(NULL));
+    char nomeArquivo[NOME_ARQUIVO];
 
-    FILE *file = fopen(fileName, "r");
+    printf("\nDigite o nome do arquivo onde está o seu programa: ");
+    fgets(nomeArquivo, NOME_ARQUIVO, stdin);
+    nomeArquivo[strcspn(nomeArquivo, "\r\n")] = '\0';
+
+    FILE *file = fopen(nomeArquivo, "r");
 
     if(file == NULL)
     {
-        printf("\nErro ao ler o arquivo!\n");
-        return;
+        return false;
+    }
+
+    char linha[10];
+
+    while(fgets(linha, 10, file) && simpletron->instructionCounter < MAX_MEMORY)
+    {
+        linha[strcspn(linha, "\r\n")] = '\0';
+
+        simpletron->instructionRegister = atoi(linha);
+
+        /*
+        Apenas armazena a instrução se ela não for a sentinela e nem for uma instrução
+        inválida.
+        */
+        if(simpletron->instructionRegister == -99999)
+        {
+            break;
+        }
+        else if(!estaNointervalo(simpletron->instructionRegister))
+        {
+            mensagemErro(simpletron, INVALID_INSTRUCTION);
+            /*
+            Fiz isso, porque quando cair no if de executarPrograma(), o programa não
+            será executado o que é conveniente já que uma instrução inválida foi digitada.
+            */
+            return false;
+        }
+        else
+        {
+            simpletron->memory[simpletron->instructionCounter] = simpletron->instructionRegister;
+
+            simpletron->instructionCounter++;
+        }
+
     }
 
     printf("\n** Carga do programa concluída. **\n");
-    printf("\n** Iniciando a execução do programa. **\n");
-    printf("\n--------------------------------\n");
 
-    char linha[7];
+    fclose(file);
 
-    while(fgets(linha, 7, file) && simpletron->instructionCounter < MAX_MEMORY)
+    simpletron->instructionCounter = 0;
+
+    simpletron->instructionRegister = 0;
+
+    return true;
+
+}
+
+/*
+IMPORTANTE: Essa função simula o famoso ciclo de processamento ou ciclo de instrução
+realizado pelo Processador.
+*/
+void executarPrograma(Simpletron *simpletron)
+{
+    /*
+    Esse primeiro if garante que o programa apenas será executado se tiver dado tudo certo
+    na leitura do arquivo.
+    */
+    if(!lerPrograma(simpletron))
     {
-        linha[strcspn(linha, "\n")] = '\0';
+        printf("\n** Erro ao ler o programa do arquivo. **\n");
+        return;
+    }
 
-        if(atoi(linha) == -99999)
-        {
-            printf("\n** O valor sentinela foi encontrado. **\n");
-            printf("\n** Encerrando a execução do programa de maneira normal. **\n");
-            computerDump(simpletron);
-            fclose(file);
-            return;
-        }
+    printf("\n** Iniciando a execução do programa. **\n");
 
-        simpletron->memory[simpletron->instructionCounter] = atoi(linha);
+    while(simpletron->instructionCounter < MAX_MEMORY)
+    {
 
-        if(!estaNointervalo(simpletron->memory[simpletron->instructionCounter]))
-        {
-            mensagemErro(simpletron, INTERVAL_ERROR);
-            fclose(file);
-            return;
-        }
-
+        /*
+        CICLO DE BUSCA DA INSTRUÇÃO
+        Não podemos executar as instruções diretamente da memória, logo, o primeiro passo é transferir
+        a instrução que está armzanada na memória para dentro do registrador e instrução.
+        */
         simpletron->instructionRegister = simpletron->memory[simpletron->instructionCounter];
 
+        /*
+        Recolhendo os dígitos da esquerda e colocando dentro da variável código de operação e
+        recolhendo os dígitos da direita e armazenando na variável operando.
+        */
         simpletron->operationCode = simpletron->instructionRegister / 100;
 
         simpletron->operand = simpletron->instructionRegister % 100;
 
-        if(!executarPrograma(simpletron, simpletron->operationCode))
+        /*
+        CICLO DE EXECUÇÃO DA INSTRUÇÃO.
+        */
+        if(!executarInstrucao(simpletron, simpletron->operationCode))
         {
-            fclose(file);
             return;
         }
-
-        simpletron->instructionCounter++;
     }
+
 }

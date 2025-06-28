@@ -29,4 +29,6 @@
 
 #define QTD_NUM 100
 
+#define NOME_ARQUIVO 30
+
 #endif // CONSTANTES_H_INCLUDED

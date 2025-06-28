@@ -13,7 +13,7 @@ int main()
 
     Simpletron simpletron = simpletronInitializer();
 
-    lerPrograma(&simpletron, "soma.txt");
+    executarPrograma(&simpletron);
 
     return 0;
 }
